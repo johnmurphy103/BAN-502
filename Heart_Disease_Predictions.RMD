@@ -1,0 +1,429 @@
+---
+output:
+  word_document: default
+  html_document: default
+---
+```{r include = FALSE}
+library(tidyverse)
+library(tidymodels)
+library(e1071)
+library(ROCR)
+library(caret)
+library(skimr)
+library(GGally)
+library(gridExtra)
+library(vip)
+library(corrplot)
+library(mice) #package for imputation
+library(VIM) #visualizing missingness
+library(ranger) #for random forests
+library(randomForest)
+library(rpart)
+library(rpart.plot)
+library(RColorBrewer)
+library(rattle)
+library(modelr)
+```
+
+```{r}
+heart <- read_csv("heart.csv")
+```
+
+```{r}
+str(heart)
+summary(heart)
+```
+
+```{r}
+skim(heart)
+```
+
+
+```{r}
+heart <- heart %>%
+  mutate(Sex = as_factor(Sex)) %>%
+  mutate(ChestPainType = as_factor(ChestPainType)) %>%
+  mutate(RestingECG = as_factor(RestingECG)) %>%
+  mutate(ExerciseAngina = as_factor(ExerciseAngina)) %>%
+  mutate(ST_Slope = as_factor(ST_Slope)) %>%
+  mutate(FastingBS = as.factor(FastingBS)) %>%
+  mutate(HeartDisease = as_factor(HeartDisease)) %>%
+  mutate(HeartDisease = fct_recode(HeartDisease, "No" = "0", "Yes" = "1")) %>%
+  filter(Cholesterol > 0)
+str(heart)
+```
+
+```{r}
+ggplot(data = heart, aes(x = Age)) +
+  geom_histogram(color = "darkblue", fill = "lightblue") +
+  labs(title = "Age Histogram Plot", x = "Age", y = "Count") +
+  theme(plot.title = element_text(hjust=0.5)) + 
+  theme_minimal()
+```
+
+```{r}
+ggplot(data = heart, aes(x = Sex)) +
+  stat_count(fill = "steelblue") +
+  labs(title = "Sex Bar Plot", x = "Sex", y = "Count") +
+  theme(plot.title = element_text(hjust=0.5)) +
+  theme_minimal()
+```
+
+```{r}
+heart$ChestPainType %>% summary()
+
+ggplot(data = heart, aes(x = ChestPainType)) +
+  stat_count(fill = "steelblue") +
+  labs(title = "Chest Pain Type Bar Plot", x = "Chest Pain Type", y = "Count") +
+  theme_minimal()
+```
+
+```{r}
+heart$RestingBP %>% summary()
+
+ggplot(data = heart, aes(x = RestingBP)) +
+  geom_histogram(color = "darkblue", fill = "lightblue") +
+  labs(title = "Resting Blood Pressure Histogram Plot", x = "Resting Blood Pressure", y = "Count") +
+  theme_minimal()
+```
+
+```{r}
+heart$Cholesterol %>% summary()
+
+ggplot(data = heart, aes(x = Cholesterol)) +
+  geom_histogram(color = "darkblue", fill = "lightblue") +
+  labs(title = "Serum Cholesterol Histogram Plot", x = "Serum Cholesterol", y = "Count") +
+  theme_minimal()
+```
+```{r}
+heart$FastingBS %>% summary()
+
+ggplot(data = heart, aes(x = FastingBS)) +
+  stat_count(fill = "steelblue") +
+  labs(title = "Fasting Blood Sugar Bar Plot", x = "Fasting Blood Sugar", y = "Count") +
+  theme_minimal()
+```
+```{r}
+heart$RestingECG %>% summary()
+
+ggplot(data = heart, aes(x = RestingECG)) +
+  stat_count(fill = "steelblue") +
+  labs(title = "Resting Electrocardiogram Results Bar Plot", x = "Resting Electrocardiogram Results", y = "Count") +
+  theme_minimal()
+```
+
+```{r}
+heart$MaxHR %>% summary()
+
+ggplot(data = heart, aes(x = MaxHR)) +
+  geom_histogram(color = "darkblue", fill = "lightblue") +
+  labs(title = "Maximum Heart Rate Histogram Plot", x = "Maximum Heart Rate", y = "Count") +
+  theme_minimal()
+```
+```{r}
+heart$ExerciseAngina %>% summary()
+
+ggplot(data = heart, aes(x = ExerciseAngina)) +
+  stat_count(fill = "steelblue") +
+  labs(title = "Exercise - Induced Angina Bar Plot", x = "Exercise - Induced Angina Bar Plot", y = "Count") +
+  theme_minimal()
+```
+```{r}
+heart$Oldpeak %>% summary()
+
+ggplot(data = heart, aes(x = Oldpeak)) +
+  geom_histogram(color = "darkblue", fill = "lightblue") +
+  labs(title = "Numeric Value Measured in Depression Histogram Plot", x = "Numeric Value Measured in Depression", y = "Count") +
+  theme_minimal()
+```
+```{r}
+heart$ST_Slope %>% summary()
+
+ggplot(data = heart, aes(x = ST_Slope)) +
+  stat_count(fill = "steelblue") +
+  labs(title = "ST Slope Bar Plot", x = "ST Slope Bar Plot", y = "Count") +
+  theme_minimal()
+```
+```{r}
+heart$HeartDisease %>% summary()
+
+ggplot(data = heart, aes(x = HeartDisease)) +
+  stat_count(fill = "steelblue") +
+  labs(title = "Heart Disease Bar Plot", x = "Heart Disease Bar Plot", y = "Count") +
+  theme_minimal()
+```
+
+
+```{r}
+p1 = ggplot(heart, aes(x = Sex, fill = HeartDisease)) + geom_bar(position = "fill")
+p2 = ggplot(heart, aes(x = RestingECG, fill = HeartDisease)) + geom_bar(position = "fill")
+p3 = ggplot(heart, aes(x = ExerciseAngina, fill = HeartDisease)) + geom_bar(position = "fill")
+p4 = ggplot(heart, aes(x = ST_Slope, fill = HeartDisease)) + geom_bar(position = "fill")
+grid.arrange(p1,p2,p3,p4, ncol = 2)
+```
+
+```{r}
+p1 = ggplot(heart, aes(x = HeartDisease, y = Age)) + geom_boxplot()
+p2 = ggplot(heart, aes(x = HeartDisease, y = RestingBP)) + geom_boxplot()
+p3 = ggplot(heart, aes(x = HeartDisease, y = Cholesterol)) + geom_boxplot()
+p4 = ggplot(heart, aes(x = HeartDisease, y = Oldpeak)) + geom_boxplot()
+grid.arrange(p1,p2,p3,p4, ncol = 2)
+```
+
+```{r}
+p1 = ggplot(heart, aes(x = FastingBS, fill = HeartDisease)) + geom_bar(position = "fill")
+p2 = ggplot(heart, aes(x = ExerciseAngina, fill = HeartDisease)) + geom_bar(position = "fill")
+grid.arrange(p1,p2, ncol = 2)
+```
+
+```{r}
+set.seed(123) 
+heart_split = initial_split(heart, prop = 0.75, strata = HeartDisease) #75% in training
+train = training(heart_split)
+test = testing(heart_split)
+```
+
+###Logistic Regression 
+```{r}
+heart_model = 
+  logistic_reg(mode = "classification") %>% 
+  set_engine("glm") 
+
+heart_recipe = recipe(HeartDisease ~., train)
+
+logreg_wf = workflow() %>%
+  add_recipe(heart_recipe) %>% 
+  add_model(heart_model)
+
+heart_fit = fit(logreg_wf, train)
+```
+
+### Heart Model Fit
+```{r}
+summary(heart_fit$fit$fit$fit)
+```
+
+### Predictions
+```{r}
+predictions = predict(heart_fit, train, type="prob") #develop predicted probabilities
+head(predictions)
+```
+
+### Prediction for Yes
+```{r}
+predictions = predict(heart_fit, train, type="prob")[2]
+head(predictions)
+```
+
+### ROC Curve
+```{r}
+ROCRpred = prediction(predictions, train$HeartDisease)
+
+ROCRperf = performance(ROCRpred, "tpr", "fpr")
+plot(ROCRperf, colorize=TRUE, print.cutoffs.at=seq(0,1,by=0.1), text.adj=c(-0.2,1.7))
+```
+
+### AUC Value
+```{r}
+as.numeric(performance(ROCRpred, "auc")@y.values)
+```
+### Sensitivity, Specificity & Cutoff
+```{r}
+opt.cut = function(perf, pred){
+    cut.ind = mapply(FUN=function(x, y, p){
+        d = (x - 0)^2 + (y-1)^2
+        ind = which(d == min(d))
+        c(sensitivity = y[[ind]], specificity = 1-x[[ind]], 
+            cutoff = p[[ind]])
+    }, perf@x.values, perf@y.values, pred@cutoffs)
+}
+print(opt.cut(ROCRperf, ROCRpred))
+```
+### Use cutoff for best value in the confusion matrix
+```{r}
+#confusion matrix
+#The "No" and "Yes" represent the actual values
+#The "FALSE" and "TRUE" represent our predicted values
+t1 = table(train$HeartDisease,predictions > .4539403)
+t1
+```
+### Accuracy
+```{r}
+((t1[1,1]+t1[2,2])/nrow(train)) * 100
+```
+### Apply to test data
+```{r}
+testpredlog = predict(heart_fit,test)
+head(testpredlog)
+```
+### Here we wave an accuracy of 88.2%
+### 94 patients were correctly classified as not having heart disease
+### 18 patients were wrongly classified as having heart disease that did not have heart disease
+### 4 Patients were wrongly classified as not having heart disease that had heart disease
+### 71 patients were correctly classified as having heart disease
+```{r}
+confusionMatrix(testpredlog$.pred_class, as_factor(test$HeartDisease),
+                positive = "Yes")
+```
+
+
+```{r}
+heart_model2 = 
+  logistic_reg(mode = "classification") %>% #note the use of logistic_reg and mode = "classification"
+  set_engine("glm") #standard logistic regression engine is glm
+
+heart_recipe2 = recipe(HeartDisease ~ Sex + ChestPainType + Cholesterol + FastingBS + ExerciseAngina + Oldpeak + ST_Slope, train)
+
+logreg_wf2 = workflow() %>%
+  add_recipe(heart_recipe2) %>% 
+  add_model(heart_model2)
+
+heart_fit2 = fit(logreg_wf2, train)
+```
+
+```{r}
+summary(heart_fit2$fit$fit$fit)
+```
+
+```{r}
+predictions = predict(heart_fit2, train, type="prob") #develop predicted probabilities
+head(predictions)
+```
+
+```{r}
+predictions = predict(heart_fit2, train, type="prob")[2]
+head(predictions)
+```
+
+```{r}
+ROCRpred = prediction(predictions, train$HeartDisease)
+
+ROCRperf = performance(ROCRpred, "tpr", "fpr")
+plot(ROCRperf, colorize=TRUE, print.cutoffs.at=seq(0,1,by=0.1), text.adj=c(-0.2,1.7))
+```
+
+```{r}
+as.numeric(performance(ROCRpred, "auc")@y.values)
+```
+
+```{r}
+opt.cut = function(perf, pred){
+    cut.ind = mapply(FUN=function(x, y, p){
+        d = (x - 0)^2 + (y-1)^2
+        ind = which(d == min(d))
+        c(sensitivity = y[[ind]], specificity = 1-x[[ind]], 
+            cutoff = p[[ind]])
+    }, perf@x.values, perf@y.values, pred@cutoffs)
+}
+print(opt.cut(ROCRperf, ROCRpred))
+```
+
+```{r}
+#confusion matrix
+#The "No" and "Yes" represent the actual values
+#The "FALSE" and "TRUE" represent our predicted values
+t1 = table(train$HeartDisease,predictions > .5491748)
+t1
+```
+
+```{r}
+((t1[1,1]+t1[2,2])/nrow(train)) * 100
+```
+
+```{r}
+testpredlog = predict(heart_fit2,test)
+head(testpredlog)
+```
+
+```{r}
+confusionMatrix(testpredlog$.pred_class, as_factor(test$HeartDisease),
+                positive = "Yes")
+```
+```{r}
+heartpredlog = predict(heart_fit2,heart)
+head(heartpredlog)
+
+predictions = predict(heart_fit2, heart, type="prob")[2]
+head(predictions)
+```
+### Add predictions to a new data set
+```{r}
+new_heart = cbind(heart, predictions, heartpredlog)
+```
+
+### Random Forests
+```{r}
+heart_recipe3 = recipe(HeartDisease ~., train) %>%
+  step_dummy(all_nominal(), -all_outcomes())
+
+heart_model3 = rand_forest() %>% 
+  set_engine("ranger", importance = "permutation") %>%
+  set_mode("classification")
+
+heart_wflow3 = 
+  workflow() %>% 
+  add_model(heart_model3) %>% 
+  add_recipe(heart_recipe3)
+
+set.seed(123)
+heart_fit3 = fit(heart_wflow3, train)
+```
+
+```{r}
+trainpredrf = predict(heart_fit3, train)
+head(trainpredrf)
+```
+
+```{r}
+confusionMatrix(trainpredrf$.pred_class, as_factor(train$HeartDisease), 
+                positive = "Yes")
+```
+
+### Variable Importance, ST_Slope_Flat explains 8% of the variance
+```{r}
+heart_fit3 %>% pull_workflow_fit() %>% vip(geom = "point")
+```
+
+```{r}
+testpredrf = predict(heart_fit3, test)
+head(testpredrf)
+```
+
+```{r}
+confusionMatrix(testpredrf$.pred_class, as_factor(test$HeartDisease), 
+                positive = "Yes")
+```
+### Decision Tree
+```{r}
+heart_recipe4 = recipe(HeartDisease ~., train) %>%
+  step_dummy(all_nominal(), -all_outcomes())
+
+heart_model4 = decision_tree() %>% 
+  set_engine("rpart", model = TRUE) %>% 
+  set_mode("classification")
+
+heart_wflow4 = 
+  workflow() %>% 
+  add_model(heart_model4) %>% 
+  add_recipe(heart_recipe4)
+
+heart_fit4 = fit(heart_wflow4, train)
+heart_fit4 %>%
+  extract_fit_parsnip() %>%
+  pluck("fit")  
+```
+
+```{r}
+tree = heart_fit4 %>% 
+  pull_workflow_fit() %>% 
+  pluck("fit")
+```
+
+```{r}
+fancyRpartPlot(tree, tweak=1.5)
+```
+
+```{r}
+heart_fit4$fit$fit$fit$cptable
+```
+
