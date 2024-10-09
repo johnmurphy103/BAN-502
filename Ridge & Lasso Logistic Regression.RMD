@@ -1,0 +1,96 @@
+```{r}
+library(tidyverse) #tidyverse set of packages and functions
+library(tidymodels)
+library(glmnet) #for Lasso, ridge, and elastic net models 
+library(GGally) #create ggcorr and ggpairs plots
+library(ggcorrplot) #create an alternative to ggcorr plots
+library(MASS) #access to forward and backward selection algorithms
+library(leaps) #best subset selection
+library(lmtest) #for the dw test
+library(splines) #for nonlinear fitting
+library(car) #for calculating the variance inflation factor
+```
+
+```{r}
+Stroke_Data <- read_csv("healthcare-dataset-stroke-data.csv")
+```
+
+```{r}
+stroke_subset <- Stroke_Data %>%
+  dplyr::select("gender","hypertension","heart_disease","ever_married","work_type","Residence_type","avg_glucose_level","bmi","smoking_status","stroke") %>%
+   filter(bmi != "N/A", gender != "Other")
+```
+
+```{r}
+str(stroke_subset)
+summary(stroke_subset)
+```
+
+```{r}
+stroke_subset <- stroke_subset %>%
+  mutate(hypertension = as_factor(hypertension)) %>%
+  mutate(stroke = fct_recode(hypertension, "No" = "0", "Yes" = "1" )) %>%
+  mutate(stroke = as_factor(stroke)) %>%
+  mutate(stroke = fct_recode(stroke, "No" = "0", "Yes" = "1" )) %>%
+  mutate(heart_disease = as_factor(heart_disease)) %>%
+  mutate(stroke = fct_recode(heart_disease, "No" = "0", "Yes" = "1" )) %>%
+  mutate(ever_married = as_factor(ever_married)) %>%
+  mutate(work_type = as_factor(work_type)) %>%
+  mutate(Residence_type = as_factor(Residence_type)) %>%
+  mutate(smoking_status = as_factor(smoking_status)) %>%
+  mutate(bmi = as.numeric(bmi)) %>%
+  mutate(gender = as.factor(gender))
+str(stroke_subset)
+```
+
+```{r}
+set.seed(123)
+stroke_split = initial_split(stroke_subset, prop = 0.80, strata = stroke)
+train = training(stroke_split)
+test = testing(stroke_split)
+```
+
+```{r}
+folds = vfold_cv(train, v = 10)
+```
+
+
+```{r}
+glmnet_recipe = recipe(stroke ~., train) %>% #add all variables via ~.
+  step_dummy(all_nominal(), -all_outcomes()) %>% 
+  step_normalize(all_predictors(), -all_nominal()) 
+
+glmnet_spec <- 
+  logistic_reg(penalty = tune(), mixture = 1) %>% 
+  set_mode("classification") %>% 
+  set_engine("glmnet") 
+
+glmnet_workflow <- 
+  workflow() %>% 
+  add_recipe(glmnet_recipe) %>% 
+  add_model(glmnet_spec) 
+
+glmnet_grid = grid_regular(penalty(), levels = 100)
+
+#note the use of alternative metric (min log loss)
+glmnet_tune <- 
+  tune_grid(glmnet_workflow, resamples = folds, 
+            grid = glmnet_grid, metrics = metric_set(mn_log_loss))
+```
+
+```{r}
+glmnet_tune %>%
+  collect_metrics() %>%
+  ggplot(aes(penalty, mean, color = .metric)) +
+  geom_errorbar(aes(
+    ymin = mean - std_err,
+    ymax = mean + std_err
+  ),
+  alpha = 0.5
+  ) +
+  geom_line(size = 1.5) +
+  facet_wrap(~.metric, scales = "free", nrow = 2) +
+  scale_x_log10() +
+  theme(legend.position = "none")
+```
+
