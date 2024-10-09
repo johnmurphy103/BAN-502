@@ -1,0 +1,89 @@
+```{r}
+library(tidyverse)
+library(tidymodels)
+library(glmnet)
+library(GGally)
+library(ggcorrplot)
+library(MASS)
+library(car)
+library(lubridate)
+library(lmtest)
+library(splines)
+
+bike_cleaned <- read_csv("bike_cleaned-3.csv")
+```
+
+```{r}
+bike = bike_cleaned %>% mutate(dteday = mdy(dteday))
+
+bike = bike %>% mutate_if(is.character, as_factor)
+
+bike = bike %>% mutate(hr = as.factor(hr))
+```
+
+```{r}
+ggpairs(bike, columns = c(10:13,16))
+```
+
+```{r}
+ggpairs(bike, columns = c(3,16))
+```
+
+```{r}
+bike %>% group_by(season) %>% summarize(count = n()) %>% arrange(desc(count))
+
+```
+
+
+```{r}
+bike_simple = recipe(count ~ hr + temp, bike)
+
+lm_model =
+  linear_reg() %>%
+  set_engine("lm")
+
+lm_wflow =
+  workflow() %>%
+  add_model(lm_model) %>%
+  add_recipe(bike_simple)
+
+lm_fit = fit(lm_wflow, bike)
+```
+
+```{r}
+summary(lm_fit$fit$fit$fit)
+```
+
+```{r}
+
+bike_simple2 = recipe(count ~ temp + atemp , bike)
+
+lm_model2 =
+  linear_reg() %>%
+  set_engine("lm")
+
+lm_wflow2 =
+  workflow() %>%
+  add_model(lm_model2) %>%
+  add_recipe(bike_simple2)
+
+lm_fit2 = fit(lm_wflow2, bike)
+```
+
+```{r}
+summary(lm_fit2$fit$fit$fit)
+```
+
+```{r}
+allmod <- lm(count ~ season + mnth + hr + holiday + weekday + workingday + weathersit + temp + atemp + hum + windspeed, bike)
+```
+
+```{r}
+backmod = stepAIC(allmod, direction = "backward", trace = TRUE) #trace = TRUE shows how the model is built (which variables are removed)
+summary(backmod)
+```
+
+```{r}
+lm(count ~ hr, bike)
+```
+

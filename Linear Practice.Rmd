@@ -1,0 +1,100 @@
+---
+title: "Linear Model Practice"
+author: "John Murphy"
+date: "2023-05-22"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(tidymodels)
+library(GGally)
+library(lmtest)
+```
+
+```{r}
+real_estate <- read_csv("real_estate.csv")
+```
+
+```{r}
+str(real_estate)
+summary(real_estate)
+```
+
+```{r}
+ggpairs(real_estate)
+```
+
+```{r}
+ggplot(real_estate,aes(x=Distance_to_Transit, y=Price_Unit_Area)) + geom_point(alpha=0.5) + theme_bw()
+```
+
+```{r}
+real_estate_simple = recipe(Price_Unit_Area ~ Distance_to_Transit, real_estate)
+
+lm_model =
+  linear_reg() %>%
+  set_engine("lm")
+
+lm_wflow =
+  workflow() %>%
+  add_model(lm_model) %>%
+  add_recipe(real_estate_simple)
+
+lm_fit = fit(lm_wflow, real_estate)
+```
+
+```{r}
+summary(lm_fit$fit$fit$fit)
+```
+
+```{r}
+ggplot(real_estate, aes(x=Distance_to_Transit, y=Price_Unit_Area)) + geom_point() +
+  geom_smooth(method="lm", se=FALSE, color="red") + theme_bw()
+```
+
+```{r}
+dwtest(lm_fit$fit$fit$fit)
+```
+
+```{r}
+realestate = real_estate %>%
+  mutate(resid1 = lm_fit$fit$fit$fit$residuals)
+ggplot(realestate,aes(x=Distance_to_Transit,y=resid1)) + geom_point() + theme_bw()
+```
+
+```{r}
+ggplot(realestate, aes(x=resid1)) + geom_histogram() + theme_bw()
+```
+
+```{r}
+real_estate_simple = recipe(Price_Unit_Area ~ Distance_to_Transit, realestate) %>%
+  step_sqrt(all_predictors())
+
+lm_model =
+  linear_reg() %>%
+  set_engine("lm")
+
+lm_wflow =
+  workflow() %>%
+  add_model(lm_model) %>%
+  add_recipe(real_estate_simple)
+
+lm_fit = fit(lm_wflow, realestate)
+```
+
+```{r}
+summary(lm_fit$fit$fit$fit)
+```
+
+```{r}
+testdata = data.frame(Distance_to_Transit = c(100,1000))
+predict(lm_fit, new_data = testdata)
+```
+

@@ -1,0 +1,88 @@
+---
+output:
+  word_document: default
+  html_document: default
+---
+```{r}
+library(tidyverse)
+library(tidymodels)
+library(GGally)
+```
+
+```{r}
+college <- read_csv("College.csv")
+glimpse(college)
+```
+
+```{r}
+college <- college %>% mutate(Type = as_factor(Type))
+str(college)
+```
+
+```{r}
+ggpairs(college, columns = c(2:7))
+```
+
+```{r}
+ggplot(college, aes(x=Type, y=GradPercent)) + geom_boxplot() + theme_bw()
+ggplot(college, aes(x=Type, y=GradPercent)) + geom_boxplot() +
+  geom_jitter() + theme_bw()
+```
+
+```{r}
+grad_recipe = recipe(GradPercent ~ Type, college) %>%
+  step_dummy(Type)
+
+lm_model = 
+  linear_reg() %>%
+  set_engine("lm")
+
+lm_wflow =
+  workflow() %>%
+  add_model(lm_model) %>%
+  add_recipe(grad_recipe)
+
+lm_fit = fit(lm_wflow, college)
+```
+
+```{r}
+summary(lm_fit$fit$fit$fit)
+```
+
+```{r}
+predict(lm_fit, new_data = data.frame(Type = c("Lib Arts", "University")))
+```
+
+```{r}
+flower = iris
+str(flower)
+```
+
+```{r}
+ggpairs(flower)
+```
+
+```{r}
+iris_recipe = recipe(Sepal.Length ~ Species, flower) %>% 
+  step_dummy(Species)
+
+lm_model2 =
+  linear_reg() %>%
+  set_engine("lm")
+
+lm_wflow2 = 
+  workflow() %>%
+  add_model(lm_model2) %>%
+  add_recipe(iris_recipe)
+
+lm_fit2 = fit(lm_wflow2, flower)
+```
+
+```{r}
+summary(lm_fit2$fit$fit$fit)
+```
+
+```{r}
+predict(lm_fit2, new_data = data.frame(Species = c("setosa", "versicolor", "virginica")))
+```
+
