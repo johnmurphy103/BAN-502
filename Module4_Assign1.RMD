@@ -1,0 +1,37 @@
+```{r}
+options(tidyverse.quiet = TRUE)
+library(titanic)
+library(tidyverse)
+library(tidymodels)
+library(mice) #package for imputation
+library(VIM) #visualizing missingness
+library(naniar) #visualizing missingness
+library(skimr) #alternative way to view dataset summaries
+library(UpSetR) #visualizing missingness
+```
+
+```{r}
+class_grades <- read_csv("class-grades.csv")
+```
+
+```{r}
+str(class_grades)
+skim(class_grades)
+```
+
+```{r}
+row_drop <- class_grades %>% drop_na()
+```
+
+```{r}
+set.seed(123) #sets seed for random number generator
+imp_age = mice(class_grades, m=5, method='pmm', printFlag=FALSE)
+
+summary(imp_age)
+```
+
+```{r}
+classes_complete <- complete(imp_age)
+summary(classes_complete)
+```
+

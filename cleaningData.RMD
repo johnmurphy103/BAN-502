@@ -1,0 +1,36 @@
+```{r}
+options(tidyverse.quiet = TRUE)
+library(titanic)
+library(tidyverse)
+library(tidymodels)
+library(mice) #Imputation
+library(VIM) #Visualizing Messiness
+library(skimr) #alternative way to view dataset summaries
+library(UpSetR) #visualizing missingness
+```
+
+```{r}
+titanic = titanic::titanic_train
+```
+
+```{r}
+skim(titanic)
+```
+
+```{r}
+titanic %>% mutate(Survived = as_factor(Survived)) %>%
+  mutate(Survived = fct_recode(Survived, "No" = "0", "Yes" = "1")) %>%
+  mutate(Pclass = as_factor(Pclass)) %>% 
+  mutate(Sex = as.factor(Sex)) %>%
+  mutate(Embarked = as_factor(Embarked)) %>%
+  mutate(Embarked = fct_recode(Embarked,"Unknown" = "", "Cherbourg" = "C", "Southhampton"="S", "Queenstown" = "Q")) %>%
+  select(Survived, Pclass, Sex, Age, SibSp, Parch, Fare, Embarked)
+
+str(titanic)
+skim(titanic)
+```
+
+```{r}
+titanic %>% filter(Fare == 0)
+```
+

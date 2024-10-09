@@ -1,0 +1,112 @@
+```{r, include = FALSE}
+library(tidyverse)
+library(tidymodels)
+library(usemodels)
+library(glmnet)
+library(ROCR)
+```
+
+```{r}
+results <- read_csv("cleaned.csv")
+results <- results %>% select(-...1)
+```
+
+```{r}
+str(results)
+summary(results)
+```
+
+convert to a factor
+```{r}
+results = results %>% mutate(Team_A_Win = as_factor(Team_A_Win))
+str(results)
+```
+
+Lasso Regression
+```{r}
+set.seed(5144)
+folds = group_vfold_cv(results, group = "Season")
+```
+
+```{r}
+glmnet_recipe <- 
+  recipe(formula = Team_A_Win ~ TORV_A + TORV_B + Seed_Diff + ADJOE_A + 
+           ADJOE_B + ADJDE_A + ADJDE_B + `EFG%_A` + `EFG%_B` + ORB_A + 
+           ORB_B + TOR_A + TOR_B + FTR_A + FTR_B, data = results) %>% 
+  step_dummy(all_nominal(), -all_outcomes()) %>% 
+  step_normalize(all_predictors(), -all_nominal()) 
+
+glmnet_spec <- 
+  logistic_reg(penalty = tune(), mixture = 1) %>% 
+  set_mode("classification") %>% 
+  set_engine("glmnet") 
+
+glmnet_workflow <- 
+  workflow() %>% 
+  add_recipe(glmnet_recipe) %>% 
+  add_model(glmnet_spec) 
+
+glmnet_grid = grid_regular(penalty(), levels = 100)
+
+#note the use of alternative metric (min log loss)
+glmnet_tune <- 
+  tune_grid(glmnet_workflow, resamples = folds, 
+            grid = glmnet_grid, metrics = metric_set(mn_log_loss))
+```
+
+```{r}
+glmnet_tune %>%
+  collect_metrics() %>%
+  ggplot(aes(penalty, mean)) +
+  geom_errorbar(aes(
+    ymin = mean - std_err,
+    ymax = mean + std_err
+  ),
+  alpha = 0.5
+  ) +
+  geom_line(size = 1.5) +
+  theme(legend.position = "none")
+```
+
+```{r}
+glmnet_tune %>%
+  collect_metrics() %>%
+  ggplot(aes(penalty, mean)) +
+  geom_errorbar(aes(
+    ymin = mean - std_err,
+    ymax = mean + std_err
+  ),
+  alpha = 0.5
+  ) +
+  geom_line(size = 1.5) +
+  theme(legend.position = "none") +
+  xlim(0,0.1)
+```
+
+```{r}
+best_mnlog = glmnet_tune %>%
+  select_best("mn_log_loss")
+best_mnlog
+```
+Finalize
+```{r}
+final_lasso <- glmnet_workflow %>% finalize_workflow(best_mnlog)
+```
+Fit
+```{r}
+lasso_fit <- fit(final_lasso, results)
+```
+
+```{r}
+options(scipen = 999)
+lasso_fit %>%
+  extract_fit_parsnip() %>%
+  pluck("fit") %>%
+  coef(s = best_mnlog$penalty)
+options(scipen = 0)
+```
+
+```{r}
+tidy(lasso_fit)
+```
+

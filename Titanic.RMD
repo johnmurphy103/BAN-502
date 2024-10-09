@@ -1,0 +1,134 @@
+---
+output:
+  word_document: default
+  html_document: default
+---
+```{r}
+library(titanic)
+library(tidyverse)
+library(tidymodels)
+library(glmnet)
+```
+
+```{r}
+titanic = titanic::titanic_train
+```
+
+```{r}
+titanic <- titanic %>% mutate(Survived = as_factor(Survived)) %>%
+  mutate(Survived = fct_recode(Survived, "No" = "0", "Yes" = "1")) %>%
+  mutate(Pclass = as_factor(Pclass)) %>% mutate(Sex = as_factor(Sex))
+str(titanic)
+summary(titanic)
+```
+
+```{r}
+ggplot(titanic, aes(x=Pclass, fill = Survived)) + geom_bar() + theme_bw()
+```
+
+```{r}
+ggplot(titanic, aes(x=Pclass, fill = Survived)) + geom_bar(position="fill") + theme_bw()
+```
+
+```{r}
+t1 = table(titanic$Survived, titanic$Pclass)
+prop.table(t1, margin = 2)
+```
+
+```{r}
+ggplot(titanic, aes(x = Sex, fill = Survived)) + geom_bar() + theme_bw()
+```
+
+```{r}
+titanic_model <-
+  logistic_reg() %>%
+  set_engine("glm")
+
+titanic_recipe = recipe(Survived ~ Pclass, titanic) %>%
+  step_dummy(all_nominal(), -all_outcomes())
+
+logreg_wf = workflow() %>%
+  add_recipe(titanic_recipe) %>%
+  add_model(titanic_model)
+
+titanic_fit = fit(logreg_wf, titanic)
+```
+
+```{r}
+summary(titanic_fit$fit$fit$fit)
+```
+
+```{r}
+
+titanic_model <-
+  logistic_reg() %>%
+  set_engine("glm") #Standard logistic regression engine is glm
+
+titanic_recipe = recipe(Survived ~ Pclass + Sex, titanic) %>%
+  step_dummy(all_nominal(), -all_outcomes())
+
+logreg_wf = workflow() %>%
+  add_recipe(titanic_recipe) %>%
+  add_model(titanic_model)
+
+titanic_fit2 = fit(logreg_wf, titanic)
+```
+
+```{r}
+summary(titanic_fit2$fit$fit$fit)
+```
+
+```{r}
+titanic_model <-
+  logistic_reg() %>%
+  set_engine("glm") #Standard logistic regression engine is glm
+
+titanic_recipe = recipe(Survived ~ Pclass + Sex + Age, titanic) %>%
+  step_dummy(all_nominal(), -all_outcomes())
+
+logreg_wf = workflow() %>%
+  add_recipe(titanic_recipe) %>%
+  add_model(titanic_model)
+
+titanic_fit3 = fit(logreg_wf, titanic)
+```
+
+```{r}
+summary(titanic_fit3$fit$fit$fit)
+```
+
+```{r}
+newdata = data.frame(Sex = "male", Pclass = "3", Age = 39)
+predict(titanic_fit3, newdata, type="prob")
+```
+
+```{r}
+newdata = data.frame(Sex = "female", Pclass = "1", Age = 6)
+predict(titanic_fit3, newdata, type="prob")
+```
+
+
+```{r}
+newdata = data.frame(Sex = "male", Pclass = "2", Age = 26)
+predict(titanic_fit3, newdata, type="prob")
+```
+
+```{r}
+titanic_model <-
+  logistic_reg() %>%
+  set_engine("glm") #Standard logistic regression engine is glm
+
+titanic_recipe = recipe(Survived ~ Pclass + Sex + Age + SibSp + Parch, titanic) %>%
+  step_dummy(all_nominal(), -all_outcomes())
+
+logreg_wf = workflow() %>%
+  add_recipe(titanic_recipe) %>%
+  add_model(titanic_model)
+
+titanic_fit4 = fit(logreg_wf, titanic)
+```
+
+```{r}
+summary(titanic_fit4$fit$fit$fit)
+```
+
