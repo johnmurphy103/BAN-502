@@ -1,0 +1,68 @@
+---
+output:
+  word_document: default
+  html_document: default
+---
+```{r}
+library(tidyverse)
+library(tidymodels)
+library(glmnet)
+library(GGally)
+library(ggcorrplot)
+library(MASS)
+library(car)
+library(lubridate)
+library(lmtest)
+library(splines)
+```
+
+```{r}
+bike <- read_csv("bike_cleaned-4.csv")
+```
+
+```{r}
+bike = bike %>% mutate(dteday = mdy(dteday))
+
+bike = bike %>% mutate_if(is.character, as_factor)
+
+bike = bike %>% mutate(hr = as.factor(hr))
+```
+
+
+```{r}
+set.seed(1234)
+bike_split <- initial_split(bike, prop = .70, strata = count)
+train <- training(bike_split)
+test <- testing(bike_split)
+```
+
+```{r}
+bike_recipe <- recipe(count ~ season + mnth + hr + holiday + weekday + temp + weathersit, train)
+
+lm_model =
+  linear_reg() %>%
+  set_engine("lm")
+
+lm_wflow =
+  workflow() %>%
+  add_model(lm_model) %>%
+  add_recipe(bike_recipe)
+
+lm_fit = fit(lm_wflow, train)
+```
+
+```{r}
+summary(lm_fit$fit$fit$fit)
+```
+
+```{r}
+predict_train <- lm_fit %>% 
+                 predict(test) %>% 
+                 bind_cols(test) %>% 
+                 metrics(truth = count, estimate = .pred)
+```
+
+```{r}
+predict(lm_fit, newdata = mnth, interval = 'confidence')
+```
+

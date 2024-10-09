@@ -1,0 +1,46 @@
+```{r}
+library(tidyverse)
+library(tidymodels)
+library(GGally)
+```
+
+```{r}
+credit <- read_csv("CreditData.csv")
+```
+
+Split Data. 80% of the data to training.  
+```{r}
+set.seed(123)
+credit_split = initial_split(credit, prop = 0.80, strata = AnnualCharges)
+train = training(credit_split)
+test = testing(credit_split)
+```
+
+```{r}
+ggpairs(train)
+```
+
+```{r}
+credit_recipe = recipe(AnnualCharges ~ AnnualIncome, train)
+
+lm_model =
+  linear_reg() %>%
+  set_engine("lm")
+
+lm_wflow = 
+  workflow() %>%
+  add_model(lm_model) %>%
+  add_recipe(credit_recipe)
+  
+lm_fit = fit(lm_wflow, train)
+```
+
+```{r}
+summary(lm_fit$fit$fit$fit)
+```
+If severe degradation of R squared value for this model then you can assume over fitting of the training set 
+
+```{r}
+lm_fit %>% predict(test) %>% bind_cols(test) %>% metrics(truth = AnnualCharges, estimate = .pred)
+```
+
