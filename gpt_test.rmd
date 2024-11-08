@@ -1,0 +1,174 @@
+---
+output:
+  word_document: default
+  html_document: default
+---
+```{r echo=FALSE, results='hide',message=FALSE}
+library(tidyverse)
+library(tidymodels)
+library(caret)
+library(lubridate)
+library(readxl)
+library(gridExtra)
+library(vip)
+library(ROCR)
+```
+
+```{r results='hide',message=FALSE}
+df <- read_excel("TCM Call Outcome.xlsx", 
+    col_types = c("text", "numeric", "text", 
+        "text", "date", "numeric", "text", 
+        "text", "numeric", "text", "text", 
+        "text", "text", "text"))
+```
+
+```{r results='hide',message=FALSE}
+df <- df %>%
+  mutate(age_group = ifelse(df$age_group %in% c("Under 5 years","5 to 9 years","10 to 14 years","15 to 19 years"), "0-19",
+                   ifelse(df$age_group %in% c("20 to 24 years","25 to 29 years","30 to 34 years","35 to 39 years"), "20-39",
+                   ifelse(df$age_group %in% c("40 to 44 years","45 to 49 years","50 to 54 years","55 to 59 years"), "40-59",
+                   ifelse(df$age_group %in% c("60 to 64 years","65 to 69 years","70 to 74 years","75 to 79 years"), "60-79",
+                   ifelse(df$age_group %in% c("80 to 84 years","85 years and over"), "80 & Over", 
+                   "N/A"))))))
+```
+
+```{r results='hide',message=FALSE}
+df <- df %>%
+  filter(Day_Of_The_Week != "Sunday")
+```
+
+```{r results='hide',message=FALSE}
+df <- df %>% 
+  mutate(Call_Outcome= as_factor(Call_Outcome)) %>%
+  mutate(Call_Outcome = fct_recode(Call_Outcome, "Not Successful" = "0", "Successful" = "1")) %>%
+  mutate(Time_Of_Day = as_factor(Time_Of_Day)) %>%
+  mutate(`Top-4-Condition` = as_factor(`Top-4-Condition`)) %>%
+  mutate(Day_Of_The_Week = as_factor(Day_Of_The_Week)) %>%
+  mutate(Call_Hour = as_factor(Call_Hour)) %>%
+  mutate(age_group = as_factor(age_group)) %>%
+  mutate(gender = as_factor(gender))
+str(df)
+```
+
+```{r}
+p1 = ggplot(df, aes(x=Time_Of_Day, fill = Call_Outcome)) + geom_bar() + theme_bw()
+p2 = ggplot(df, aes(fill= Call_Outcome, x=Time_Of_Day)) + geom_bar(position="fill")
+grid.arrange(p1,p2, ncol = 1)
+```
+
+```{r}
+p1 = ggplot(df, aes(x=Call_Hour, fill = Call_Outcome)) + geom_bar() + theme_bw()
+p2 = ggplot(df, aes(fill= Call_Outcome, x=Call_Hour)) + geom_bar(position="fill")
+grid.arrange(p1,p2, ncol = 1)
+```
+
+```{r}
+p1 = ggplot(df, aes(x=age_group, fill = Call_Outcome)) + geom_bar() + theme_bw()
+p2 = ggplot(df, aes(fill= Call_Outcome, x=age_group)) + geom_bar(position="fill")
+grid.arrange(p1,p2, ncol = 1)
+```
+
+```{r}
+p1 = ggplot(df, aes(x=`Top-4-Condition`, fill = Call_Outcome)) + geom_bar() + theme_bw()
+p2 = ggplot(df, aes(fill= Call_Outcome, x=`Top-4-Condition`)) + geom_bar(position="fill")
+grid.arrange(p1,p2, ncol = 1)
+```
+
+```{r}
+set.seed(123) 
+data_split = initial_split(df, prop = 0.75, strata = Call_Outcome) #75% in training
+train_data = training(data_split)
+test_data = testing(data_split)
+```
+
+```{r}
+logistic_model <- logistic_reg() %>%
+  set_engine("glm")
+
+data_recipe <- recipe(Call_Outcome ~ Call_Hour + Day_Of_The_Week + age_group + gender, data = train_data) %>%
+  step_dummy(all_nominal_predictors())
+
+data_workflow <- workflow() %>%
+  add_model(logistic_model) %>%
+  add_recipe(data_recipe)
+```
+
+```{r}
+set.seed(123)
+
+cv_folds <- vfold_cv(train_data, v = 5)
+model_results <- fit_resamples(
+  data_workflow,
+  resamples = cv_folds,
+  metrics = metric_set(accuracy, roc_auc)
+)
+```
+
+```{r}
+model_results %>%
+  collect_metrics()
+```
+```{r}
+final_model <- fit(data_workflow, data = train_data)
+```
+
+```{r}
+predictions <- predict(final_model, new_data = test_data) %>%
+  bind_cols(test_data)
+```
+
+```{r}
+predictions = predict(final_model, train_data, type="prob")[2]
+head(predictions)
+```
+
+### ROC Curve
+```{r}
+ROCRpred = prediction(predictions, train_data$Call_Outcome)
+
+ROCRperf = performance(ROCRpred, "tpr", "fpr")
+plot(ROCRperf, colorize=TRUE, print.cutoffs.at=seq(0,1,by=0.1), text.adj=c(-0.2,1.7))
+```
+
+```{r}
+as.numeric(performance(ROCRpred, "auc")@y.values)
+```
+
+```{r}
+opt.cut = function(perf, pred){
+    cut.ind = mapply(FUN=function(x, y, p){
+        d = (x - 0)^2 + (y-1)^2
+        ind = which(d == min(d))
+        c(sensitivity = y[[ind]], specificity = 1-x[[ind]], 
+            cutoff = p[[ind]])
+    }, perf@x.values, perf@y.values, pred@cutoffs)
+}
+print(opt.cut(ROCRperf, ROCRpred))
+```
+
+```{r}
+#confusion matrix
+#The "No" and "Yes" represent the actual values
+#The "FALSE" and "TRUE" represent our predicted values
+t1 = table(train_data$Call_Outcome,predictions > 0.4372686)
+t1
+```
+
+```{r}
+((t1[1,1]+t1[2,2])/nrow(train)) * 100
+```
+
+```{r}
+testpredlog = predict(final_model,test_data)
+head(testpredlog)
+```
+
+```{r}
+confusionMatrix(testpredlog$.pred_class, as_factor(test_data$Call_Outcome),
+                positive = "Successful")
+```
+
+```{r}
+final_model %>% pull_workflow_fit() %>% vip(geom = "point")
+```
+
